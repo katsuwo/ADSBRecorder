@@ -1,0 +1,21 @@
+Recievers:
+    - Dump1090:
+        DeviceIndex: 0
+        RawOutPort: 40003
+        dummyPort1: 50101
+        dummyPort2: 50102
+        dummyPort3: 50103
+        dummyPort4: 50104
+        Gain: 49.6
+        OtherOption: --raw --net
+
+    - Dump1090:
+        DeviceIndex: 1
+        RawOutPort: 40004
+        dummyPort1: 50201
+        dummyPort2: 50202
+        dummyPort3: 50203
+        dummyPort4: 50204
+        Gain: 49.6
+        OtherOption: --raw --net
+
