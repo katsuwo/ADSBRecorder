@@ -8,6 +8,7 @@ import threading
 import PacketRingBuffer
 import sqlite3
 import datetime
+import select
 
 CONFIGFILE = './config.yaml'
 DUMP1090 = "/home/katsuwo/work/dump1090/dump1090"
@@ -24,6 +25,7 @@ class ADSBRecorder:
 		self.start_time = time.time()
 		self.connection, self.cursor = self.make_db()
 		self.row_counter = 0
+		self.client_socket = None
 		self.output_buffer = PacketRingBuffer.PacketRingBuffer(maxsize=100)
 		self.config = self.read_configuration_file(CONFIGFILE)
 		self.dump1090_process, self.raw_data_in_ports = self.startup_dump1090(self.config)
@@ -51,7 +53,7 @@ class ADSBRecorder:
 
 			exec_cmd = f"{DUMP1090} --device {device_index} --gain {gain}  --net-ro-port {raw_out_port} --net-bo-port {dummy_port1} --net-sbs-port {dummy_port2} --net-ri-port {dummy_port3}"
 			exec_cmd = f"{exec_cmd} --net-bi-port {dummy_port4} {opt}"
-			p = subprocess.Popen(exec_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+			p = subprocess.Popen(exec_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 			processes.append(p)
 			out_ports.append(dp1090["RawOutPort"])
 			print(exec_cmd)
@@ -59,47 +61,29 @@ class ADSBRecorder:
 		return processes, out_ports
 
 	def read_and_exec(self, ports, connection, cursor):
-		threads = []
-		thread_num = 0
-		ring_buffers = []
 		server_thread = self.start_server()
 
+		descriptors = []
 		for port in ports:
-			rb = PacketRingBuffer.PacketRingBuffer(maxsize=100)
-			t = threading.Thread(target=self.socket_worker, args=( port, rb))
-			t.start()
-			threads.append(t)
-			ring_buffers.append(rb)
-			print(f"Thread {thread_num} start")
-			thread_num += 1
+			sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+			time.sleep(1)
+			print(f"Connect to {port}")
+			sock.connect((DUMP1090HOST, port))
+			descriptors.append(sock)
 
 		while True:
-			thread_num = 0
-			for buffer in ring_buffers:
-				if buffer.read_position is not buffer.write_position:
-					num = buffer.read_position
-					dat = buffer.get()
-					if self.output_buffer.check_is_duplicate(dat) is False:
-						self.output_buffer.append(dat)
-						elapsed_time = time.time() - self.start_time
-						print(f"{thread_num}: {elapsed_time} : {dat}")
-						self.write_db(connection=connection, cursor=cursor, elapsed=elapsed_time, body=dat)
-				thread_num += 1
-
-	# socket reader
-	def socket_worker(self, port, buffer):
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-		time.sleep(1)
-		print(f"Connect to {port}")
-		sock.connect((DUMP1090HOST, port))
-
-		while True:
-			dat = sock.recv(1024)
-			packet = dat.split()
-			for p in packet:
-				buffer.append(p)
+			r ,_ ,_ = select.select(descriptors, [], [])
+			for sc in r:
+				dat = sc.recv(4096)
+				if self.output_buffer.check_is_duplicate(dat) is False:
+					self.output_buffer.append(dat)
+					elapsed_time = time.time() - self.start_time
+					print(f"time{elapsed_time} : {dat}")
+					self.write_db(connection=connection, cursor=cursor, elapsed=elapsed_time, body=dat)
+				else:
+					print("SKIP")
 
 	# create dbfile and tables
 	def make_db(self):
@@ -160,18 +144,20 @@ class ADSBRecorder:
 			try:
 				sock.bind((DUMP1090HOST, OUTPORT))
 				sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-				sock.listen(5)
+				sock.listen(3)
 			except Exception:
 				exit(-1)
 
 			while True:
-				clientsocket, address = sock.accept()
+				self.client_socket, address = sock.accept()
 				print(f"Connect {address}")
-				while True:
-					if self.output_buffer.write_position is not self.output_buffer.read_position:
-						dat = self.output_buffer.get()
-						clientsocket.send(dat)
-
+				with self.client_socket:
+					while True:
+						if self.output_buffer.write_position is not self.output_buffer.read_position:
+							dat = self.output_buffer.get()
+							self.client_socket.send(dat)
+						else:
+							time.sleep(0.1)
 
 	def signal_handler(self, signo, _):
 		self.connection.commit()
