@@ -7,7 +7,8 @@ If you do not set these, dump1090 will not start in --net mode.
 
 dump1090 needs to be pre-installed.
 
-複数のdump1090を起動し、それらから得られるsocketをmergeし、sqliteに記録する。
+複数のdump1090を起動し、それらから得られるsocketをマージし、sqliteに記録する。
+socketはOUTPUTポートへの出力も行う
 
 設定はconfig.yamlファイルにて行う。
 config.yamlファイル中のdummyport1~4は未使用ポートを個別にアサインする事。

@@ -12,6 +12,7 @@ import datetime
 CONFIGFILE = './config.yaml'
 DUMP1090 = "/home/katsuwo/work/dump1090/dump1090"
 DUMP1090HOST = "127.0.0.1"
+OUTPORT = 30002
 
 class ADSBRecorder:
 
@@ -23,6 +24,7 @@ class ADSBRecorder:
 		self.start_time = time.time()
 		self.connection, self.cursor = self.make_db()
 		self.row_counter = 0
+		self.output_buffer = PacketRingBuffer.PacketRingBuffer(maxsize=100)
 		self.config = self.read_configuration_file(CONFIGFILE)
 		self.dump1090_process, self.raw_data_in_ports = self.startup_dump1090(self.config)
 		self.read_and_exec(self.raw_data_in_ports, self.connection, self.cursor)
@@ -60,6 +62,8 @@ class ADSBRecorder:
 		threads = []
 		thread_num = 0
 		ring_buffers = []
+		server_thread = self.start_server()
+
 		for port in ports:
 			rb = PacketRingBuffer.PacketRingBuffer(maxsize=100)
 			t = threading.Thread(target=self.socket_worker, args=( port, rb))
@@ -69,15 +73,14 @@ class ADSBRecorder:
 			print(f"Thread {thread_num} start")
 			thread_num += 1
 
-		output_buffer = PacketRingBuffer.PacketRingBuffer(maxsize=100)
 		while True:
 			thread_num = 0
 			for buffer in ring_buffers:
 				if buffer.read_position is not buffer.write_position:
 					num = buffer.read_position
 					dat = buffer.get()
-					if output_buffer.check_is_duplicate(dat) is False:
-						output_buffer.append(dat)
+					if self.output_buffer.check_is_duplicate(dat) is False:
+						self.output_buffer.append(dat)
 						elapsed_time = time.time() - self.start_time
 						print(f"{thread_num}: {elapsed_time} : {dat}")
 						self.write_db(connection=connection, cursor=cursor, elapsed=elapsed_time, body=dat)
@@ -87,6 +90,7 @@ class ADSBRecorder:
 	def socket_worker(self, port, buffer):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
 		time.sleep(1)
 		print(f"Connect to {port}")
 		sock.connect((DUMP1090HOST, port))
@@ -145,6 +149,29 @@ class ADSBRecorder:
 			else:
 				print(f"Failed kill PID:{p}")
 		print("-------------------------")
+
+	def start_server(self):
+		t = threading.Thread(target=self.server)
+		t.start()
+		return t
+
+	def server(self):
+		with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+			try:
+				sock.bind((DUMP1090HOST, OUTPORT))
+				sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+				sock.listen(5)
+			except Exception:
+				exit(-1)
+
+			while True:
+				clientsocket, address = sock.accept()
+				print(f"Connect {address}")
+				while True:
+					if self.output_buffer.write_position is not self.output_buffer.read_position:
+						dat = self.output_buffer.get()
+						clientsocket.send(dat)
+
 
 	def signal_handler(self, signo, _):
 		self.connection.commit()
