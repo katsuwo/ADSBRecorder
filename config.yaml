@@ -16,6 +16,6 @@ Recievers:
         dummyPort2: 50202
         dummyPort3: 50203
         dummyPort4: 50204
-        Gain: 49.6
+        Gain: 5
         OtherOption: --raw --net
 
