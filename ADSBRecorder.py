@@ -14,6 +14,7 @@ CONFIGFILE = './config.yaml'
 DUMP1090 = "/home/katsuwo/work/dump1090/dump1090"
 DUMP1090HOST = "127.0.0.1"
 OUTPORT = 30002
+OUTPUTDIR = "./database/"
 
 class ADSBRecorder:
 
@@ -87,7 +88,7 @@ class ADSBRecorder:
 
 	# create dbfile and tables
 	def make_db(self):
-		conn = sqlite3.connect(f"./{self.get_datetime_string()}.db")
+		conn = sqlite3.connect(f"{OUTPUTDIR}{self.get_datetime_string()}.db")
 		c = conn.cursor()
 		c.execute('CREATE TABLE IF NOT EXISTS data(id INTEGER PRIMARY KEY AUTOINCREMENT, time REAL, body STRING)')
 		conn.commit()
@@ -146,6 +147,7 @@ class ADSBRecorder:
 				sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 				sock.listen(3)
 			except Exception:
+				print("Exception raised. exit.")
 				exit(-1)
 
 			while True:
