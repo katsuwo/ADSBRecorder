@@ -42,8 +42,8 @@ class ADSBPlayer:
                 sock.bind((DUMP1090HOST, OUTPORT))
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.listen(3)
-                # client_socket, address = sock.accept()
-                # self.read_exec(client_socket)
+                client_socket, address = sock.accept()
+                self.read_exec(client_socket)
                 self.read_exec(3)
             except Exception as e :
                 print(e)
@@ -57,7 +57,7 @@ class ADSBPlayer:
         total_rows = c.fetchall()[0][0]
         print(f"obtain {total_rows} records.")
 
-        while self.loop:
+        while True:
             start_time = time.time()
             start_id, end_id = self.get_start_and_end_frame(c, self.start, self.duration)
             if end_id == -1:
@@ -77,9 +77,11 @@ class ADSBPlayer:
                     dat = row[2].replace("b'", "")
                     dat = dat.replace("\\n", "")
                     dat = dat.replace("'", "")
-                    # sock.send(dat.encode())
+                    sock.send(dat.encode())
                     print(f"{row[0]} : {row[1]}")
                     start_id += 1
+            if not self.loop:
+                break
         conn.close()
 
     def get_start_and_end_frame(self, cursor, start_time, duration):
