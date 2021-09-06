@@ -13,7 +13,7 @@ import argparse
 
 CONFIGFILE = './config.yaml'
 DUMP1090 = "/home/katsuwo/work/dump1090/dump1090"
-DUMP1090HOST = "127.0.0.1"
+DUMP1090HOST = "0.0.0.0"
 OUTPORT = 30002
 
 class ADSBPlayer:
