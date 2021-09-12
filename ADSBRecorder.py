@@ -12,6 +12,7 @@ import select
 
 CONFIGFILE = './config.yaml'
 DUMP1090 = "/home/katsuwo/work/dump1090/dump1090"
+RTLAIS = "rtl_ais"
 DUMP1090HOST = "127.0.0.1"
 OUTPORT = 30002
 OUTPUTDIR = "./database/"
@@ -30,6 +31,7 @@ class ADSBRecorder:
 		self.output_buffer = PacketRingBuffer.PacketRingBuffer(maxsize=100)
 		self.config = self.read_configuration_file(CONFIGFILE)
 		self.dump1090_process, self.raw_data_in_ports = self.startup_dump1090(self.config)
+		self.rtlais_process, self.raw_data_in_ports = self.startup_rtlais(self.config, self.raw_data_in_ports)
 		self.read_and_exec(self.raw_data_in_ports, self.connection, self.cursor)
 
 	def read_configuration_file(self, file_name):
@@ -41,7 +43,7 @@ class ADSBRecorder:
 		processes = []
 		out_ports = []
 		print("Startup dump1090")
-		for rc in config["Recievers"]:
+		for rc in config["Recievers"]["ADSB"]:
 			dp1090 = rc["Dump1090"]
 			device_index = str(dp1090["DeviceIndex"])
 			gain = str(dp1090["Gain"])
@@ -59,6 +61,22 @@ class ADSBRecorder:
 			out_ports.append(dp1090["RawOutPort"])
 			print(exec_cmd)
 		print("Done.")
+		return processes, out_ports
+
+	def startup_rtlais(self, config, out_ports):
+		processes = []
+		print("Startup rtl_ais")
+		for rc in config["Recievers"]["AIS"]:
+			rtlais = rc["RtlAIS"]
+			device_index = str(rtlais["DeviceIndex"])
+			opt = rtlais["OtherOption"]
+			raw_out_port = str(rtlais["RawOutPort"])
+			gain = str(rtlais["Gain"])
+			exec_cmd = f"{RTLAIS} -d {device_index} -g {gain} -P {raw_out_port} {opt}"
+			p = subprocess.Popen(exec_cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+			processes.append(p)
+			out_ports.append(rtlais["RawOutPort"])
+			print(exec_cmd)
 		return processes, out_ports
 
 	def read_and_exec(self, ports, connection, cursor):

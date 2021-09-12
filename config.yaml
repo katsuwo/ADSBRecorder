@@ -1,4 +1,5 @@
 Recievers:
+  ADSB:
     - Dump1090:
         DeviceIndex: 0
         RawOutPort: 40003
@@ -18,4 +19,10 @@ Recievers:
         dummyPort4: 50204
         Gain: 5
         OtherOption: --raw --net
+  AIS:
+    - RtlAIS:
+        DeviceIndex: 2
+        RawOutPort: 10010
+        Gain: 40
+        OtherOption:
 
